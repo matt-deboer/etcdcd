@@ -67,7 +67,6 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "master-name-filter",
-			Value:  "etcd-master",
 			Usage:  "Masters' names will contain this string",
 			EnvVar: "ETCDCD_MASTER_NAME_FILTER",
 		},
@@ -76,9 +75,22 @@ func main() {
 			Usage:  "Don't perform any changes; instead log what would have been done",
 			EnvVar: "ETCDCD_DRY_RUN",
 		},
+		cli.BoolFlag{
+			Name:   "verbose, V",
+			Usage:  "Log extra information about steps taken",
+			EnvVar: "ETCDCD_VERBOSE",
+		},
+		cli.StringFlag{
+			Name:   "client-cert-file",
+			Usage:  "Client certificate to use when client-scheme is 'https'",
+			EnvVar: "ETCDCD_CLIENT_CERT_FILE",
+		},
 	}
 	app.Action = func(c *cli.Context) {
 
+		if c.Bool("verbose") {
+			log.SetLevel(log.DebugLevel)
+		}
 		environment, err := parseArgs(c).DiscoverEnvironment()
 		if err != nil {
 			log.Fatalf("Environment discovery failed; %v", err)
@@ -104,7 +116,7 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 
 	return &discovery.Discovery{
 		Platform:     platform,
-		ConfigFile:   c.String("platform-config-filee"),
+		ConfigFile:   c.String("platform-config-file"),
 		ClientPort:   c.Int("client-port"),
 		ServerPort:   c.Int("server-port"),
 		ClientScheme: c.String("client-scheme"),

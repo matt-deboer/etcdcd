@@ -61,13 +61,17 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	}
 
 	var expectedMembers []etcd.Member
-	if members, err := p.ExpectedMembers(d.MasterFilter); err == nil {
+	if members, err := p.ExpectedMembers(d.MasterFilter, d.ClientScheme,
+		d.ClientPort, d.ServerScheme, d.ServerPort); err == nil {
 		for _, m := range members {
 			// have to cast here because of golang type-system--ugh!
 			expectedMembers = append(expectedMembers, etcd.Member(m))
 		}
 	} else {
 		return nil, err
+	}
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
 
 	var etcdMembers []etcd.Member
@@ -96,6 +100,10 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 				log.Warnf("Error listing members %s [ %s ], %v", master.Name)
 				continue
 			}
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Actual cluster members: %#v", etcdMembers)
+			}
+
 			break
 		}
 		if !resolved {
@@ -108,28 +116,35 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	environment["ETCD_NAME"] = p.LocalInstanceName()
 	environment["ETCD_INITIAL_CLUSTER"] = initialClusterString(expectedMembers)
 
-	localMaster := findMemberByName(etcdMembers, p.LocalInstanceName())
-	if len(etcdMembers) > 0 && localMaster != nil {
-		d.evictBadPeers(membersAPI, expectedMembers, etcdMembers)
-
-		if d.ProxyMode {
-			environment["ETCD_PROXY"] = "on"
-		} else {
+	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
+	if localMaster != nil {
+		if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("Local master: %#v", *localMaster)
+		}
+		// this instance is an expected master
+		if len(etcdMembers) > 0 {
+			// there is an existing cluster
+			d.evictBadPeers(membersAPI, expectedMembers, etcdMembers)
 			log.Infof("Joining existing cluster as a master")
 			if err := d.joinExistingCluster(membersAPI, *localMaster); err != nil {
 				log.Fatal(err)
 			}
+			environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
+		} else {
+			log.Infof("Creating a new cluster")
+			environment["ETCD_INITIAL_CLUSTER_STATE"] = "new"
 		}
-		environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
 	} else {
-		log.Infof("Creating a new cluster")
-		environment["ETCD_INITIAL_CLUSTER_STATE"] = "new"
+		environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
+		if d.ProxyMode {
+			environment["ETCD_PROXY"] = "on"
+		}
 	}
 	return environment, nil
 }
 
 func initialClusterString(members []etcd.Member) string {
-	initialCluster := make([]string, len(members), 0)
+	initialCluster := make([]string, 0, len(members))
 	for _, m := range members {
 		member := fmt.Sprintf("%s=%s", m.Name, m.PeerURLs[0])
 		initialCluster = append(initialCluster, member)

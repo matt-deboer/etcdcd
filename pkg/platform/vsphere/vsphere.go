@@ -67,12 +67,16 @@ type VSphereConfig struct {
 		// If not set, will be fetched from the machine via sysfs (requires root)
 		VMUUID string `gcfg:"vm-uuid"`
 	}
+	Network struct {
+		// PublicNetwork is name of the network the VMs are joined to.
+		PublicNetwork string `gcfg:"public-network"`
+	}
 }
 
 func init() {
 	platform.Register("vsphere", func(config io.Reader) (platform.Platform, error) {
 		cfg, err := readConfig(config)
-		if err != nil {
+		if err != nil && strings.Contains(err.Error(), "errors") {
 			log.Fatal("Failed reading config: ", err)
 		}
 		return newVSphere(cfg)
@@ -92,9 +96,10 @@ func readConfig(config io.Reader) (VSphereConfig, error) {
 }
 
 // ExpectedMembers returns a list of members that should form the cluster
-func (vs *VSphere) ExpectedMembers(memberFilter string) ([]etcd.Member, error) {
+func (vs *VSphere) ExpectedMembers(
+	memberFilter string, clientScheme string, clientPort int, serverScheme string, serverPort int) ([]etcd.Member, error) {
 
-	masters := []etcd.Member{}
+	members := []etcd.Member{}
 	names, err := vs.list(memberFilter)
 	if err != nil {
 		return nil, err
@@ -104,9 +109,18 @@ func (vs *VSphere) ExpectedMembers(memberFilter string) ([]etcd.Member, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("EtcdMaster{ name: %s, ip: %v }", name, addrs)
+		member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
+		for _, addr := range addrs {
+			member.ClientURLs = append(member.ClientURLs, fmt.Sprintf("%s://%s:%d", clientScheme, addr, clientPort))
+			member.PeerURLs = append(member.PeerURLs, fmt.Sprintf("%s://%s:%d", serverScheme, addr, serverPort))
+		}
+
+		if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("ExpectedMembers: member: %#v", member)
+		}
+		members = append(members, member)
 	}
-	return masters, nil
+	return members, nil
 }
 
 // LocalInstanceName returns a list of members that should form the cluster
@@ -120,6 +134,7 @@ func (vs *VSphere) LocalInstanceName() string {
 // * cloud config value VMUUID
 // * sysfs entry
 func getVMName(client *govmomi.Client, cfg *VSphereConfig) (string, error) {
+
 	var vmUUID string
 
 	if cfg.Global.VMUUID != "" {
@@ -165,11 +180,17 @@ func getVMName(client *govmomi.Client, cfg *VSphereConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("getVMName: vm.Name=%s", vm.Name)
+	}
 	return vm.Name, nil
 }
 
 func newVSphere(cfg VSphereConfig) (*VSphere, error) {
+
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("newVSphere")
+	}
 
 	if cfg.Global.WorkingDir != "" {
 		cfg.Global.WorkingDir = path.Clean(cfg.Global.WorkingDir) + "/"
@@ -265,6 +286,10 @@ func vSphereLogin(ctx context.Context, vs *VSphere) error {
 func getVirtualMachineByName(ctx context.Context, cfg *VSphereConfig, c *govmomi.Client, nodeName string) (*object.VirtualMachine, error) {
 	name := nodeNameToVMName(nodeName)
 
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("getVirtualMachineByName: name=%s", name)
+	}
+
 	// Create a new finder
 	f := find.NewFinder(c.Client, true)
 
@@ -300,6 +325,10 @@ func getVirtualMachineManagedObjectReference(ctx context.Context, c *govmomi.Cli
 
 // Returns names of running VMs inside VM folder.
 func getInstances(ctx context.Context, cfg *VSphereConfig, c *govmomi.Client, filter string) ([]string, error) {
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("getInstances: filter=%s", filter)
+	}
+
 	f := find.NewFinder(c.Client, true)
 	dc, err := f.Datacenter(ctx, cfg.Global.Datacenter)
 	if err != nil {
@@ -380,8 +409,12 @@ func (vs *VSphere) getAddresses(nodeName string) ([]string, error) {
 
 	// retrieve VM's ip(s)
 	for _, v := range mvm.Guest.Net {
-		for _, ip := range v.IpAddress {
-			addrs = append(addrs, ip)
+		if v.Network == vs.cfg.Network.PublicNetwork {
+			for _, ip := range v.IpAddress {
+				addrs = append(addrs, ip)
+			}
+		} else if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("getAddresses: nodeName=%s, net %v are not in configured network", nodeName, v.IpAddress)
 		}
 	}
 	return addrs, nil

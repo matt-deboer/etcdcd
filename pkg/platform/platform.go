@@ -13,7 +13,8 @@ import (
 type Platform interface {
 
 	// ExpectedMembers returns a list of members that should form the cluster
-	ExpectedMembers(nameFilter string) ([]client.Member, error)
+	ExpectedMembers(memberFilter string, clientScheme string, clientPort int,
+		serverScheme string, serverPort int) ([]client.Member, error)
 
 	// LocalInstanceName returns the instance name for the local instance
 	LocalInstanceName() string
