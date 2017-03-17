@@ -104,7 +104,7 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 
 	return &discovery.Discovery{
 		Platform:     platform,
-		ConfigFile:   c.String("config-file"),
+		ConfigFile:   c.String("platform-config-filee"),
 		ClientPort:   c.Int("client-port"),
 		ServerPort:   c.Int("server-port"),
 		ClientScheme: c.String("client-scheme"),
