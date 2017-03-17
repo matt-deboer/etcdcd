@@ -379,8 +379,10 @@ func (vs *VSphere) list(filter string) ([]string, error) {
 		return nil, err
 	}
 
-	log.Infof("Found %d instances matching %s: %s",
-		len(vmList), filter, vmList)
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("Found %d instances matching %s:[ %s ]",
+			len(vmList), filter, strings.Join(vmList, ", "))
+	}
 
 	var nodeNames []string
 	for _, n := range vmList {

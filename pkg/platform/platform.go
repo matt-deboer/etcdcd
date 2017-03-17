@@ -37,7 +37,9 @@ func Register(name string, factory Factory) {
 	if _, found := platforms[name]; found {
 		log.Fatalf("Platform %q was registered more than once", name)
 	}
-	log.Infof("Registered platform %q", name)
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("Registered platform %q", name)
+	}
 	platforms[name] = factory
 }
 
