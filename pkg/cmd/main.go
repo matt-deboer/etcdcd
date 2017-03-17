@@ -96,7 +96,7 @@ func main() {
 			log.Fatalf("Environment discovery failed; %v", err)
 		}
 		for k, v := range environment {
-			println(fmt.Sprintf(`%s="%s"`, k, v))
+			fmt.Printf(`%s="%s"`, k, v)
 		}
 	}
 	app.Run(os.Args)
