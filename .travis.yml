@@ -22,6 +22,7 @@ deploy:
 after_deploy:
 - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
 - export REPO=mattdeboer/etcdcd
+- echo "Building ${REPO}:${TRAVIS_TAG}"
 - docker build -f Dockerfile -t $REPO:$TRAVIS_TAG .
 - docker push $REPO:$TRAVIS_TAG
 - docker tag $REPO:$TRAVIS_TAG $REPO:latest
