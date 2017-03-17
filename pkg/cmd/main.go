@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"bytes"
+
+	"io/ioutil"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/matt-deboer/etcdcd/pkg/discovery"
 	_ "github.com/matt-deboer/etcdcd/pkg/platform/all"
@@ -35,6 +39,11 @@ func main() {
 			Name:   "platform-config-file, c",
 			Usage:  "The platform config file",
 			EnvVar: "ETCDCD_PLATFORM_CONFIG",
+		},
+		cli.StringFlag{
+			Name:   "output-file, o",
+			Usage:  "The path to the output file where results will be written; uses STDOUT if not specified",
+			EnvVar: "ETCDCD_OUTPUT_FILE",
 		},
 		cli.IntFlag{
 			Name:   "client-port",
@@ -95,8 +104,15 @@ func main() {
 		if err != nil {
 			log.Fatalf("Environment discovery failed; %v", err)
 		}
+
+		out := bytes.NewBufferString("")
 		for k, v := range environment {
-			fmt.Printf("%s=\"%s\"\n", k, v)
+			fmt.Fprintf(out, "%s=\"%s\"\n", k, v)
+		}
+		if outputFile := c.String("output-file"); len(outputFile) > 0 {
+			ioutil.WriteFile(outputFile, out.Bytes(), 0644)
+		} else {
+			fmt.Println(out.String())
 		}
 	}
 	app.Run(os.Args)
