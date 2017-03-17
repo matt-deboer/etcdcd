@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,16 +16,17 @@ import (
 // Discovery provides correct startup details for etcd with respect to
 // known vs. expected cluster membership
 type Discovery struct {
-	ConfigFile   string
-	Platform     string
-	ClientPort   int
-	ServerPort   int
-	ClientScheme string
-	ServerScheme string
-	MaxTries     int
-	ProxyMode    bool
-	MasterFilter string
-	DryRun       bool
+	ConfigFile           string
+	Platform             string
+	ClientPort           int
+	ServerPort           int
+	ClientScheme         string
+	ServerScheme         string
+	MaxTries             int
+	ProxyMode            bool
+	MasterFilter         string
+	DryRun               bool
+	IgnoreNamingMismatch bool
 }
 
 func findMemberByName(members []etcd.Member, name string) *etcd.Member {
@@ -37,8 +39,8 @@ func findMemberByName(members []etcd.Member, name string) *etcd.Member {
 }
 
 func containsMember(members []etcd.Member, member etcd.Member) bool {
-	for _, master := range members {
-		for _, peerURL := range master.PeerURLs {
+	for _, m := range members {
+		for _, peerURL := range m.PeerURLs {
 			for _, memberPeerURL := range member.PeerURLs {
 				if peerURL == memberPeerURL {
 					return true
@@ -129,6 +131,10 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		// this instance is an expected master
 		if len(currentMembers) > 0 {
 			// there is an existing cluster
+			if err = d.assertSaneClusterState(expectedMembers, currentMembers); err != nil {
+				log.Fatal(err)
+			}
+
 			d.evictBadPeers(membersAPI, expectedMembers, currentMembers)
 			log.Infof("Joining existing cluster as a master")
 			// TODO: what if we encounter a state where not of the expected masters are
@@ -162,7 +168,46 @@ func initialClusterString(members []etcd.Member) string {
 	return strings.Join(initialCluster, ",")
 }
 
+func (d *Discovery) assertSaneClusterState(expectedMembers []etcd.Member, currentMembers []etcd.Member) error {
+	partialMatchCount := 0
+	for _, current := range currentMembers {
+		for _, expected := range expectedMembers {
+			matchingPeerURL := ""
+			for _, expectedPeerURL := range expected.PeerURLs {
+				for _, currentPeerURL := range current.PeerURLs {
+					if expectedPeerURL == currentPeerURL {
+						matchingPeerURL = expectedPeerURL
+						partialMatchCount++
+						break
+					}
+				}
+				if len(matchingPeerURL) > 0 {
+					break
+				}
+			}
+			if len(matchingPeerURL) > 0 && current.Name != expected.Name {
+				if !d.IgnoreNamingMismatch {
+					return fmt.Errorf("Expected peer %s with peer URL %s already exists with a different name: %s",
+						expected.Name, matchingPeerURL, current.Name)
+				} else if log.GetLevel() >= log.DebugLevel {
+					log.Debugf("Ignoring expected peer %s with peer URL %s already exists with a different name: %s",
+						expected.Name, matchingPeerURL, current.Name)
+				}
+			}
+		}
+	}
+	if partialMatchCount == 0 && len(expectedMembers) > 0 && len(currentMembers) > 0 {
+		expectedJSON, _ := json.Marshal(expectedMembers)
+		currentJSON, _ := json.Marshal(currentMembers)
+		return fmt.Errorf("Invalid cluster state: found no intersection between peer URLs of expected members %s and current members %s",
+			expectedJSON, currentJSON)
+	}
+
+	return nil
+}
+
 func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []etcd.Member, currentMembers []etcd.Member) {
+
 	for _, peer := range currentMembers {
 		if !containsMember(expectedMembers, peer) {
 			msg := fmt.Sprintf("Ejecting bad peer %s %v from the cluster:", peer.Name, peer.PeerURLs)
