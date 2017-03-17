@@ -71,6 +71,11 @@ func main() {
 			Usage:  "Masters' names will contain this string",
 			EnvVar: "ETCDCD_MASTER_NAME_FILTER",
 		},
+		cli.BoolFlag{
+			Name:   "dry-run",
+			Usage:  "Don't perform any changes; instead log what would have been done",
+			EnvVar: "ETCDCD_DRY_RUN",
+		},
 	}
 	app.Action = func(c *cli.Context) {
 

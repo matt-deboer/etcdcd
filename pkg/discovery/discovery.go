@@ -24,6 +24,7 @@ type Discovery struct {
 	MaxTries     int
 	ProxyMode    bool
 	MasterFilter string
+	DryRun       bool
 }
 
 func findMemberByName(members []etcd.Member, name string) *etcd.Member {
@@ -140,13 +141,17 @@ func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []
 	for _, peer := range etcdMembers {
 		if !containsMember(expectedMembers, peer) {
 			msg := fmt.Sprintf("Ejecting bad peer %s %v from the cluster:", peer.Name, peer.PeerURLs)
-			for tries := 0; tries < d.MaxTries; tries++ {
-				err := membersAPI.Remove(context.Background(), peer.ID)
-				if err == nil {
-					log.Infof("%s DONE", msg)
-					break
-				} else if (tries + 1) == d.MaxTries {
-					log.Errorf("%s ERROR: %v", msg, err)
+			if d.DryRun {
+				log.Infof("DRY_RUN: would have ejected peer %s %v from the cluster", peer.Name, peer.PeerURLs)
+			} else {
+				for tries := 0; tries < d.MaxTries; tries++ {
+					err := membersAPI.Remove(context.Background(), peer.ID)
+					if err == nil {
+						log.Infof("%s DONE", msg)
+						break
+					} else if (tries + 1) == d.MaxTries {
+						log.Errorf("%s ERROR: %v", msg, err)
+					}
 				}
 			}
 		}
@@ -156,13 +161,17 @@ func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []
 func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI, localMember etcd.Member) error {
 	msg := "Joining existing cluster: "
 	for tries := 0; tries < d.MaxTries; tries++ {
-		_, err := membersAPI.Add(context.Background(), localMember.PeerURLs[0])
-		if err == nil {
-			log.Infof("%s DONE", msg)
-			break
-		} else if (tries + 1) == d.MaxTries {
-			log.Errorf("%s ERROR: %v", msg, err)
-			return err
+		if d.DryRun {
+			log.Infof("DRY_RUN: would have added %s %v to the cluster", localMember.Name, localMember.PeerURLs)
+		} else {
+			_, err := membersAPI.Add(context.Background(), localMember.PeerURLs[0])
+			if err == nil {
+				log.Infof("%s DONE", msg)
+				break
+			} else if (tries + 1) == d.MaxTries {
+				log.Errorf("%s ERROR: %v", msg, err)
+				return err
+			}
 		}
 	}
 	return nil
