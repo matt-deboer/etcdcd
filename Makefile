@@ -25,7 +25,7 @@ ca-certificates.crt:
 	@docker cp etcdcd_cacerts:/etc/ssl/certs/ca-certificates.crt .
 	@docker rm -f etcdcd_cacerts
 
-docker: release ca-certificates.crt
+docker: ca-certificates.crt
 	@docker build -t ${DOCKER_IMAGE} .
 
 clean:
