@@ -41,8 +41,8 @@ func Register(name string, factory Factory) {
 }
 
 // Get creates an instance of the named platform, or nil if
-// the name is unknown.  The error return is only used if the named provider
-// was known but failed to initialize. The config parameter specifies the
+// the name is unknown.  The error return is only used if the named platform
+// was known but failed to initialize. The configPath parameter specifies the
 // path of the configuration file for the platform, or empty for no configuation.
 func Get(name string, configPath string) (Platform, error) {
 	platformsMutex.Lock()
