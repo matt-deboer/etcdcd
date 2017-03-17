@@ -139,7 +139,9 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
 		environment["ETCD_PROXY"] = "on"
 	} else {
-		return nil, errors.New("Invalid cluster configuration: localhost (%s) is not an expected master, and not in proxy mode")
+		return nil, fmt.Errorf(
+			"Invalid cluster configuration: localhost (%s) is not an expected master, and not in proxy mode",
+			p.LocalInstanceName())
 	}
 	return environment, nil
 }
