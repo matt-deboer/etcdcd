@@ -168,6 +168,10 @@ func initialClusterString(members []etcd.Member) string {
 	return strings.Join(initialCluster, ",")
 }
 
+// Check for mismatched names between expected and current members with
+// matching peer URLs; also check for lack of intersection between
+// expected and current members--indicating an invalid current (or expected)
+// cluster state
 func (d *Discovery) assertSaneClusterState(expectedMembers []etcd.Member, currentMembers []etcd.Member) error {
 	partialMatchCount := 0
 	for _, current := range currentMembers {

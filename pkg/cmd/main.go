@@ -80,10 +80,10 @@ func main() {
 			Usage:  "Log extra information about steps taken",
 			EnvVar: "ETCDCD_VERBOSE",
 		},
-		cli.StringFlag{
-			Name:   "client-cert-file",
-			Usage:  "Client certificate to use when client-scheme is 'https'",
-			EnvVar: "ETCDCD_CLIENT_CERT_FILE",
+		cli.BoolFlag{
+			Name:   "ignore-naming-mismatch",
+			Usage:  "Whether to ignore names (and only compare peer urls) when looking for existing members",
+			EnvVar: "ETCDCD_IGNORE_NAMING_MISMATCH",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -115,13 +115,14 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 	}
 
 	return &discovery.Discovery{
-		Platform:     platform,
-		ConfigFile:   c.String("platform-config-file"),
-		ClientPort:   c.Int("client-port"),
-		ServerPort:   c.Int("server-port"),
-		ClientScheme: c.String("client-scheme"),
-		ServerScheme: c.String("server-scheme"),
-		ProxyMode:    c.Bool("proxy"),
-		MasterFilter: masterFilter,
+		Platform:             platform,
+		ConfigFile:           c.String("platform-config-file"),
+		ClientPort:           c.Int("client-port"),
+		ServerPort:           c.Int("server-port"),
+		ClientScheme:         c.String("client-scheme"),
+		ServerScheme:         c.String("server-scheme"),
+		ProxyMode:            c.Bool("proxy"),
+		IgnoreNamingMismatch: c.Bool("ignore-naming-mismatch"),
+		MasterFilter:         masterFilter,
 	}
 }
