@@ -74,12 +74,11 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
 
-	var etcdMembers []etcd.Member
+	var currentMembers []etcd.Member
 	ctx := context.Background()
 
 	var membersAPI etcd.MembersAPI
-	resolved := false
-	for resolved {
+	for tries := 0; tries <= d.MaxTries; tries++ {
 		for _, master := range expectedMembers {
 
 			cfg := etcd.Config{
@@ -95,20 +94,26 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			}
 
 			membersAPI := etcd.NewMembersAPI(etcdClient)
-			etcdMembers, err = membersAPI.List(ctx)
+			currentMembers, err = membersAPI.List(ctx)
 			if err != nil {
 				log.Warnf("Error listing members %s [ %s ], %v", master.Name)
 				continue
 			}
 			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("Actual cluster members: %#v", etcdMembers)
+				log.Debugf("Actual cluster members: %#v", currentMembers)
 			}
 
 			break
 		}
-		if !resolved {
+		if len(currentMembers) == 0 {
 			// TODO: what's our timeout here?
-			time.Sleep(10 * time.Second)
+			sleepTime := (3 * time.Second)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Failed to resolve members; sleeping for %s", sleepTime)
+			}
+			time.Sleep(sleepTime)
+		} else {
+			break
 		}
 	}
 
@@ -122,10 +127,12 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Debugf("Local master: %#v", *localMaster)
 		}
 		// this instance is an expected master
-		if len(etcdMembers) > 0 {
+		if len(currentMembers) > 0 {
 			// there is an existing cluster
-			d.evictBadPeers(membersAPI, expectedMembers, etcdMembers)
+			d.evictBadPeers(membersAPI, expectedMembers, currentMembers)
 			log.Infof("Joining existing cluster as a master")
+			// TODO: what if we encounter a state where not of the expected masters are
+			// members of the current cluster?
 			if err := d.joinExistingCluster(membersAPI, *localMaster); err != nil {
 				log.Fatal(err)
 			}
@@ -155,8 +162,8 @@ func initialClusterString(members []etcd.Member) string {
 	return strings.Join(initialCluster, ",")
 }
 
-func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []etcd.Member, etcdMembers []etcd.Member) {
-	for _, peer := range etcdMembers {
+func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []etcd.Member, currentMembers []etcd.Member) {
+	for _, peer := range currentMembers {
 		if !containsMember(expectedMembers, peer) {
 			msg := fmt.Sprintf("Ejecting bad peer %s %v from the cluster:", peer.Name, peer.PeerURLs)
 			if d.DryRun {
