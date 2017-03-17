@@ -1,0 +1,25 @@
+{
+    "dependencies": {
+        "github.com/Sirupsen/logrus": {
+            "version": ">=0.10.0, <1.0.0"
+        },
+        "github.com/coreos/etcd": {
+            "branch": "master"
+        },
+        "github.com/golang/glog": {
+            "revision": "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
+        },
+        "github.com/urfave/cli": {
+            "branch": "master"
+        },
+        "github.com/vmware/govmomi": {
+            "branch": "master"
+        },
+        "golang.org/x/net": {
+            "revision": "07b51741c1d6423d4a6abab1c49940ec09cb1aaf"
+        },
+        "gopkg.in/gcfg.v1": {
+            "branch": "master"
+        }
+    }
+}
