@@ -32,7 +32,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "platform",
-			Usage:  "The platform ['aws' or 'vsphere']",
+			Usage:  "The platform ('aws' or 'vsphere')",
 			EnvVar: "ETCDCD_PLATFORM",
 		},
 		cli.StringFlag{
@@ -79,7 +79,7 @@ func main() {
 			Usage: `The naming pattern used to locate the masters; for platform 'aws', 
 				this will be the name of the masters autoscaling group; for platform 'vsphere',
 				this will be a name-glob matching the vm names of the masters (e.g., 'k8s-master-*')`,
-			EnvVar: "ETCDCD_MASTER_NAME_FILTER",
+			EnvVar: "ETCDCD_MASTER_NAMES",
 		},
 		cli.BoolFlag{
 			Name:   "dry-run",
