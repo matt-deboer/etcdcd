@@ -1,4 +1,4 @@
-VERSION       := $(shell git describe --tags --always )
+VERSION       ?= $(shell git describe --tags --always )
 TARGET        := $(shell basename `git rev-parse --show-toplevel`)
 TEST          ?= $(shell go list ./... | grep -v /vendor/)
 REPOSITORY    := mattdeboer/etcdcd
@@ -26,6 +26,7 @@ ca-certificates.crt:
 	@docker rm -f etcdcd_cacerts
 
 docker: ca-certificates.crt
+	@echo "Building ${DOCKER_IMAGE}..."
 	@docker build -t ${DOCKER_IMAGE} .
 
 clean:

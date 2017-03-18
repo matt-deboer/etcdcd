@@ -24,9 +24,11 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = Name
-	app.Usage = `etcdcd
-
-		Dynamically discover etcd cluster membership for a specific platform
+	app.Usage = `
+		Dynamically discover etcd cluster membership for a specific platform.
+		Useed to produce appropriate environment variable values for
+		'ETCD_NAME', 'ETCD_INITIAL_CLUSTER', 'ETCD_INITIAL_CLUSTER_STATE', 
+		and 'ETCD_PROXY' for use use in static cluster configuration mode.
 		`
 	app.Version = Version
 	app.Flags = []cli.Flag{
@@ -36,13 +38,17 @@ func main() {
 			EnvVar: "ETCDCD_PLATFORM",
 		},
 		cli.StringFlag{
-			Name:   "platform-config-file, c",
-			Usage:  "The platform config file",
+			Name: "platform-config-file",
+			Usage: `The platform config file; for platform 'aws', this is 
+				unnecessary/ignored when using an instance role; for platform
+				'vsphere', this file uses the same format as required by the
+				vsphere kubernetes cloud provider`,
 			EnvVar: "ETCDCD_PLATFORM_CONFIG",
 		},
 		cli.StringFlag{
-			Name:   "output-file, o",
-			Usage:  "The path to the output file where results will be written; uses STDOUT if not specified",
+			Name: "output-file",
+			Usage: `The path to the output file where results will be 
+				written; uses STDOUT if not specified`,
 			EnvVar: "ETCDCD_OUTPUT_FILE",
 		},
 		cli.IntFlag{
@@ -77,8 +83,9 @@ func main() {
 		cli.StringFlag{
 			Name: "master-names",
 			Usage: `The naming pattern used to locate the masters; for platform 'aws', 
-				this will be the name of the masters autoscaling group; for platform 'vsphere',
-				this will be a name-glob matching the vm names of the masters (e.g., 'k8s-master-*')`,
+				this will be the name of the masters autoscaling group; 
+				for platform 'vsphere', this will be a name-glob matching the vm names 
+				of the masters (e.g., 'k8s-master-*')`,
 			EnvVar: "ETCDCD_MASTER_NAMES",
 		},
 		cli.BoolFlag{
@@ -92,8 +99,9 @@ func main() {
 			EnvVar: "ETCDCD_VERBOSE",
 		},
 		cli.BoolFlag{
-			Name:   "ignore-naming-mismatch",
-			Usage:  "Whether to ignore names (and only compare peer urls) when looking for existing members",
+			Name: "ignore-naming-mismatch",
+			Usage: `Whether to ignore names (and only compare peer urls) when 
+				looking for existing members`,
 			EnvVar: "ETCDCD_IGNORE_NAMING_MISMATCH",
 		},
 	}
