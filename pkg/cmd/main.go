@@ -32,7 +32,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "platform",
-			Usage:  "The platform",
+			Usage:  "The platform ['aws' or 'vsphere']",
 			EnvVar: "ETCDCD_PLATFORM",
 		},
 		cli.StringFlag{
@@ -75,8 +75,10 @@ func main() {
 			EnvVar: "ETCDCD_PROXY_MODE",
 		},
 		cli.StringFlag{
-			Name:   "master-name-filter",
-			Usage:  "Masters' names will contain this string",
+			Name: "master-names",
+			Usage: `The naming pattern used to locate the masters; for platform 'aws', 
+				this will be the name of the masters autoscaling group; for platform 'vsphere',
+				this will be a name-glob matching the vm names of the masters (e.g., 'k8s-master-*')`,
 			EnvVar: "ETCDCD_MASTER_NAME_FILTER",
 		},
 		cli.BoolFlag{
@@ -125,9 +127,9 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 	if len(platform) == 0 {
 		log.Fatalf("'%s' is required", "platform")
 	}
-	masterFilter := c.String("master-name-filter")
+	masterFilter := c.String("master-names")
 	if len(masterFilter) == 0 {
-		log.Fatalf("'%s' is required", "master-name-filter")
+		log.Fatalf("'%s' is required", "master-names")
 	}
 
 	return &discovery.Discovery{
