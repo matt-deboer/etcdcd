@@ -86,48 +86,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
 
-	var currentMembers []etcd.Member
-	ctx := context.Background()
-
-	var membersAPI etcd.MembersAPI
-	for tries := 0; tries <= d.MaxTries; tries++ {
-		for _, master := range expectedMembers {
-
-			cfg := etcd.Config{
-				Endpoints: master.ClientURLs,
-				Transport: etcd.DefaultTransport,
-				// set timeout per request to fail fast when the target endpoint is unavailable
-				HeaderTimeoutPerRequest: time.Second,
-			}
-			etcdClient, err := etcd.New(cfg)
-			if err != nil {
-				log.Warnf("Error connecting to %s %v, %v", master.Name, master.ClientURLs, err)
-				continue
-			}
-
-			membersAPI = etcd.NewMembersAPI(etcdClient)
-			currentMembers, err = membersAPI.List(ctx)
-			if err != nil {
-				log.Warnf("Error listing members %s %v, %v", master.Name, master.ClientURLs, err)
-				continue
-			}
-			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("Actual cluster members: %#v", currentMembers)
-			}
-
-			break
-		}
-		if len(currentMembers) == 0 {
-			// TODO: what's our timeout here?
-			sleepTime := (3 * time.Second)
-			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("Failed to resolve members; sleeping for %s", sleepTime)
-			}
-			time.Sleep(sleepTime)
-		} else {
-			break
-		}
-	}
+	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers)
 
 	environment := map[string]string{}
 	environment["ETCD_NAME"] = p.LocalInstanceName()
@@ -149,7 +108,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Infof("Joining existing cluster as a master")
 			// TODO: what if we encounter a state where not of the expected masters are
 			// members of the current cluster?
-			if err := d.joinExistingCluster(membersAPI, *localMaster); err != nil {
+			if err := d.joinExistingCluster(membersAPI, expectedMembers, *localMaster); err != nil {
 				log.Fatal(err)
 			}
 			environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
@@ -245,7 +204,9 @@ func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []
 	}
 }
 
-func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI, localMember etcd.Member) error {
+func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
+	expectedMembers []etcd.Member, localMember etcd.Member) error {
+
 	msg := "Joining existing cluster: "
 	for tries := 0; tries < d.MaxTries; tries++ {
 		if d.DryRun {
@@ -259,7 +220,61 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI, localMember 
 				log.Errorf("%s ERROR: %v", msg, err)
 				return err
 			}
+			membersAPI, _, err = d.resolveMembersAndAPI(expectedMembers)
+			if err != nil {
+				log.Errorf("%s ERROR: %v", msg, err)
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
+
+	ctx := context.Background()
+	var currentMembers []etcd.Member
+	var membersAPI etcd.MembersAPI
+	var lastErr error
+	for tries := 0; tries <= d.MaxTries; tries++ {
+		for _, member := range expectedMembers {
+
+			cfg := etcd.Config{
+				Endpoints: member.ClientURLs,
+				Transport: etcd.DefaultTransport,
+				// set timeout per request to fail fast when the target endpoint is unavailable
+				HeaderTimeoutPerRequest: time.Second,
+			}
+			etcdClient, err := etcd.New(cfg)
+			if err != nil {
+				log.Warnf("Error connecting to %s %v, %v", member.Name, member.ClientURLs, err)
+				lastErr = err
+				continue
+			}
+
+			membersAPI = etcd.NewMembersAPI(etcdClient)
+			currentMembers, err = membersAPI.List(ctx)
+			if err != nil {
+				log.Warnf("Error listing members %s %v, %v", member.Name, member.ClientURLs, err)
+				lastErr = err
+				continue
+			}
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Actual cluster members: %#v", currentMembers)
+			}
+			return membersAPI, currentMembers, nil
+			break
+		}
+		if len(currentMembers) == 0 {
+			// TODO: what's our timeout here?
+			sleepTime := (1 * time.Second)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Failed to resolve members; sleeping for %s", sleepTime)
+			}
+			time.Sleep(sleepTime)
+		} else {
+			break
+		}
+	}
+	return nil, nil, lastErr
 }
