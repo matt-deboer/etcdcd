@@ -251,7 +251,9 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 				}
 				etcdClient, err := etcd.New(cfg)
 				if err != nil {
-					log.Warnf("Error connecting to %s %v, %v", member.Name, member.ClientURLs, err)
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Error connecting to %s %v, %v", member.Name, member.ClientURLs, err)
+					}
 					lastErr = err
 					continue
 				}
