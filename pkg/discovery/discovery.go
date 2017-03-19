@@ -91,14 +91,14 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			}
 			etcdClient, err := etcd.New(cfg)
 			if err != nil {
-				log.Warnf("Error connecting to %s [ %s ], %v", master.Name)
+				log.Warnf("Error connecting to %s %v, %v", master.Name, master.ClientURLs, err)
 				continue
 			}
 
 			membersAPI := etcd.NewMembersAPI(etcdClient)
 			currentMembers, err = membersAPI.List(ctx)
 			if err != nil {
-				log.Warnf("Error listing members %s [ %s ], %v", master.Name)
+				log.Warnf("Error listing members %s %v, %v", master.Name, master.ClientURLs, err)
 				continue
 			}
 			if log.GetLevel() >= log.DebugLevel {
