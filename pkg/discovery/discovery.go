@@ -85,14 +85,13 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	} else if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
-
-	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers)
+	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
+	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers, *localMaster)
 
 	environment := map[string]string{}
 	environment["ETCD_NAME"] = p.LocalInstanceName()
 	environment["ETCD_INITIAL_CLUSTER"] = initialClusterString(expectedMembers)
 
-	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
 	if localMaster != nil {
 		if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("Local master: %#v", *localMaster)
@@ -220,7 +219,10 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
 				log.Errorf("%s ERROR: %v", msg, err)
 				return err
 			}
-			membersAPI, _, err = d.resolveMembersAndAPI(expectedMembers)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Retryable error attempting to add local master %#v: %v", localMember, err)
+			}
+			membersAPI, _, err = d.resolveMembersAndAPI(expectedMembers, localMember)
 			if err != nil {
 				log.Errorf("%s ERROR: %v", msg, err)
 				return err
@@ -230,7 +232,7 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
 	return nil
 }
 
-func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
+func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMember etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
 
 	ctx := context.Background()
 	var currentMembers []etcd.Member
@@ -238,32 +240,35 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member) (etcd.Me
 	var lastErr error
 	for tries := 0; tries <= d.MaxTries; tries++ {
 		for _, member := range expectedMembers {
+			// don't attempt self connection; afterall, this is intended as a pre-cursor
+			// to the actual etcd service on the local host
+			if member.PeerURLs[0] != localMember.PeerURLs[0] {
+				cfg := etcd.Config{
+					Endpoints: member.ClientURLs,
+					Transport: etcd.DefaultTransport,
+					// set timeout per request to fail fast when the target endpoint is unavailable
+					HeaderTimeoutPerRequest: time.Second,
+				}
+				etcdClient, err := etcd.New(cfg)
+				if err != nil {
+					log.Warnf("Error connecting to %s %v, %v", member.Name, member.ClientURLs, err)
+					lastErr = err
+					continue
+				}
 
-			cfg := etcd.Config{
-				Endpoints: member.ClientURLs,
-				Transport: etcd.DefaultTransport,
-				// set timeout per request to fail fast when the target endpoint is unavailable
-				HeaderTimeoutPerRequest: time.Second,
+				membersAPI = etcd.NewMembersAPI(etcdClient)
+				currentMembers, err = membersAPI.List(ctx)
+				if err != nil {
+					log.Warnf("Error listing members %s %v, %v", member.Name, member.ClientURLs, err)
+					lastErr = err
+					continue
+				}
+				if log.GetLevel() >= log.DebugLevel {
+					log.Debugf("Actual cluster members: %#v", currentMembers)
+				}
+				return membersAPI, currentMembers, nil
+				break
 			}
-			etcdClient, err := etcd.New(cfg)
-			if err != nil {
-				log.Warnf("Error connecting to %s %v, %v", member.Name, member.ClientURLs, err)
-				lastErr = err
-				continue
-			}
-
-			membersAPI = etcd.NewMembersAPI(etcdClient)
-			currentMembers, err = membersAPI.List(ctx)
-			if err != nil {
-				log.Warnf("Error listing members %s %v, %v", member.Name, member.ClientURLs, err)
-				lastErr = err
-				continue
-			}
-			if log.GetLevel() >= log.DebugLevel {
-				log.Debugf("Actual cluster members: %#v", currentMembers)
-			}
-			return membersAPI, currentMembers, nil
-			break
 		}
 		if len(currentMembers) == 0 {
 			// TODO: what's our timeout here?
