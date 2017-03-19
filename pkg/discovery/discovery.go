@@ -63,16 +63,26 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	}
 
 	var expectedMembers []etcd.Member
-	if members, err := p.ExpectedMembers(d.MasterFilter, d.ClientScheme,
-		d.ClientPort, d.ServerScheme, d.ServerPort); err == nil {
-		for _, m := range members {
-			// have to cast here because of golang type-system--ugh!
-			expectedMembers = append(expectedMembers, etcd.Member(m))
+	for tries := 0; tries < d.MaxTries && len(expectedMembers) == 0; tries++ {
+		if members, err := p.ExpectedMembers(d.MasterFilter, d.ClientScheme,
+			d.ClientPort, d.ServerScheme, d.ServerPort); err == nil {
+			for _, m := range members {
+				// have to cast here because of golang type-system--ugh!
+				expectedMembers = append(expectedMembers, etcd.Member(m))
+			}
+		} else {
+			return nil, err
 		}
-	} else {
-		return nil, err
+		sleepTime := (2 * time.Second)
+		if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("Failed to resolve expected members; sleeping for %s", sleepTime)
+		}
+		time.Sleep(sleepTime)
 	}
-	if log.GetLevel() >= log.DebugLevel {
+
+	if len(expectedMembers) == 0 {
+		log.Fatal("Failed to determine expected members")
+	} else if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
 
@@ -160,12 +170,15 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 }
 
 func initialClusterString(members []etcd.Member) string {
-	initialCluster := make([]string, 0, len(members))
-	for _, m := range members {
-		member := fmt.Sprintf("%s=%s", m.Name, m.PeerURLs[0])
-		initialCluster = append(initialCluster, member)
+	if len(members) > 0 {
+		initialCluster := make([]string, 0, len(members))
+		for _, m := range members {
+			member := fmt.Sprintf("%s=%s", m.Name, m.PeerURLs[0])
+			initialCluster = append(initialCluster, member)
+		}
+		return strings.Join(initialCluster, ",")
 	}
-	return strings.Join(initialCluster, ",")
+	return ""
 }
 
 // Check for mismatched names between expected and current members with

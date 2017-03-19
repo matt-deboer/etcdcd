@@ -151,5 +151,6 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 		ProxyMode:            c.Bool("proxy"),
 		IgnoreNamingMismatch: c.Bool("ignore-naming-mismatch"),
 		MasterFilter:         masterFilter,
+		MaxTries:             10,
 	}
 }
