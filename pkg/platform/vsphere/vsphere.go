@@ -110,7 +110,11 @@ func (vs *VSphere) ExpectedMembers(
 			return nil, err
 		}
 		member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
-		for _, addr := range addrs {
+		for _, a := range addrs {
+			addr := a
+			if strings.Contains(a, ":") {
+				addr = "[" + a + "]"
+			}
 			member.ClientURLs = append(member.ClientURLs, fmt.Sprintf("%s://%s:%d", clientScheme, addr, clientPort))
 			member.PeerURLs = append(member.PeerURLs, fmt.Sprintf("%s://%s:%d", serverScheme, addr, serverPort))
 		}
