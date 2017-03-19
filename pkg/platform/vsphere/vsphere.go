@@ -188,10 +188,6 @@ func getVMName(client *govmomi.Client, cfg *VSphereConfig) (string, error) {
 
 func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 
-	if log.GetLevel() >= log.DebugLevel {
-		log.Debugf("newVSphere")
-	}
-
 	if cfg.Global.WorkingDir != "" {
 		cfg.Global.WorkingDir = path.Clean(cfg.Global.WorkingDir) + "/"
 	}
@@ -218,6 +214,10 @@ func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 		localInstanceID: id,
 	}
 	runtime.SetFinalizer(&vs, logout)
+
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("newVSphere: vs: %#v", vs)
+	}
 
 	return &vs, nil
 }
