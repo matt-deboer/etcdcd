@@ -105,7 +105,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 				continue
 			}
 
-			membersAPI := etcd.NewMembersAPI(etcdClient)
+			membersAPI = etcd.NewMembersAPI(etcdClient)
 			currentMembers, err = membersAPI.List(ctx)
 			if err != nil {
 				log.Warnf("Error listing members %s %v, %v", master.Name, master.ClientURLs, err)
