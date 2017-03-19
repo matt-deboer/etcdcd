@@ -261,7 +261,9 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 				membersAPI = etcd.NewMembersAPI(etcdClient)
 				currentMembers, err = membersAPI.List(ctx)
 				if err != nil {
-					log.Warnf("Error listing members %s %v, %v", member.Name, member.ClientURLs, err)
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Error listing members %s %v, %v", member.Name, member.ClientURLs, err)
+					}
 					lastErr = err
 					continue
 				}
