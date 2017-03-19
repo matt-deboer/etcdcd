@@ -115,6 +115,7 @@ func main() {
 			log.Fatalf("Environment discovery failed; %v", err)
 		}
 
+		log.Infof("Environment discovery success: results: %v", environment)
 		out := bytes.NewBufferString("")
 		for k, v := range environment {
 			fmt.Fprintf(out, "%s=\"%s\"\n", k, v)
