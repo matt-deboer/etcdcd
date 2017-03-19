@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/gcfg.v1"
 
@@ -76,7 +77,7 @@ type VSphereConfig struct {
 func init() {
 	platform.Register("vsphere", func(config io.Reader) (platform.Platform, error) {
 		cfg, err := readConfig(config)
-		if err != nil && strings.Contains(err.Error(), "errors") {
+		if err != nil && !strings.Contains(err.Error(), "warnings") {
 			log.Fatal("Failed reading config: ", err)
 		}
 		return newVSphere(cfg)
@@ -105,22 +106,32 @@ func (vs *VSphere) ExpectedMembers(
 		return nil, err
 	}
 	for _, name := range names {
-		addrs, err := vs.getAddresses(name)
-		if err != nil {
-			return nil, err
-		}
 		member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
-		for _, a := range addrs {
-			addr := a
-			if strings.Contains(a, ":") {
-				addr = "[" + a + "]"
+		for tries := 0; tries <= 10 && len(member.PeerURLs) == 0; tries++ {
+			addrs, err := vs.getAddresses(name)
+			if err != nil {
+				return nil, err
 			}
-			member.ClientURLs = append(member.ClientURLs, fmt.Sprintf("%s://%s:%d", clientScheme, addr, clientPort))
-			member.PeerURLs = append(member.PeerURLs, fmt.Sprintf("%s://%s:%d", serverScheme, addr, serverPort))
-		}
+			for _, a := range addrs {
+				addr := a
+				if strings.Contains(a, ":") {
+					addr = "[" + a + "]"
+				}
+				member.ClientURLs = append(member.ClientURLs, fmt.Sprintf("%s://%s:%d", clientScheme, addr, clientPort))
+				member.PeerURLs = append(member.PeerURLs, fmt.Sprintf("%s://%s:%d", serverScheme, addr, serverPort))
+			}
 
-		if log.GetLevel() >= log.DebugLevel {
-			log.Debugf("ExpectedMembers: member: %#v", member)
+			if len(member.PeerURLs) > 0 {
+				if log.GetLevel() >= log.DebugLevel {
+					log.Debugf("ExpectedMembers: member: %#v", member)
+				}
+			} else {
+				sleepTime := (2 * time.Second)
+				if log.GetLevel() >= log.DebugLevel {
+					log.Debugf("%s has no addresses yet; sleeping for %s", name, sleepTime)
+				}
+				time.Sleep(sleepTime)
+			}
 		}
 		members = append(members, member)
 	}
