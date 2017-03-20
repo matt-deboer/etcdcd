@@ -100,6 +100,15 @@ func readConfig(config io.Reader) (VSphereConfig, error) {
 func (vs *VSphere) ExpectedMembers(
 	memberFilter string, clientScheme string, clientPort int, serverScheme string, serverPort int) ([]etcd.Member, error) {
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := vSphereLogin(ctx, vs)
+	if err != nil {
+		log.Errorf("VCenter login failed; %v", err)
+		return nil, err
+	}
+
 	members := []etcd.Member{}
 	names, err := vs.list(memberFilter)
 	if err != nil {
