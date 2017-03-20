@@ -211,6 +211,8 @@ func getVMName(client *govmomi.Client, cfg *VSphereConfig) (string, error) {
 }
 
 func newVSphere(cfg VSphereConfig) (*VSphere, error) {
+	clientLock.Lock()
+	defer clientLock.Unlock()
 
 	if cfg.Global.WorkingDir != "" {
 		cfg.Global.WorkingDir = path.Clean(cfg.Global.WorkingDir) + "/"
