@@ -94,7 +94,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	sort.Slice(expectedMembers, func(i, j int) bool { return expectedMembers[i].Name < expectedMembers[j].Name })
 
 	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
-	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers, *localMaster)
+	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers, localMaster)
 
 	environment := map[string]string{}
 	environment["ETCD_NAME"] = p.LocalInstanceName()
@@ -115,7 +115,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Infof("Joining existing cluster as a master")
 			// TODO: what if we encounter a state where not of the expected masters are
 			// members of the current cluster?
-			if err := d.joinExistingCluster(membersAPI, expectedMembers, *localMaster); err != nil {
+			if err := d.joinExistingCluster(membersAPI, expectedMembers, localMaster); err != nil {
 				log.Fatal(err)
 			}
 			environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
@@ -212,7 +212,7 @@ func (d *Discovery) evictBadPeers(membersAPI etcd.MembersAPI, expectedMembers []
 }
 
 func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
-	expectedMembers []etcd.Member, localMember etcd.Member) error {
+	expectedMembers []etcd.Member, localMember *etcd.Member) error {
 
 	msg := "Joining existing cluster: "
 	for tries := 0; tries < d.MaxTries; tries++ {
@@ -240,7 +240,7 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
 	return nil
 }
 
-func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMember etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
+func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMember *etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
 
 	ctx := context.Background()
 	var currentMembers []etcd.Member
@@ -250,7 +250,7 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 		for _, member := range expectedMembers {
 			// don't attempt self connection; afterall, this is intended as a pre-cursor
 			// to the actual etcd service on the local host
-			if member.PeerURLs[0] != localMember.PeerURLs[0] {
+			if localMember != nil && member.PeerURLs[0] != localMember.PeerURLs[0] {
 				cfg := etcd.Config{
 					Endpoints: member.ClientURLs,
 					Transport: etcd.DefaultTransport,
@@ -279,7 +279,6 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 					log.Debugf("Actual cluster members: %#v", currentMembers)
 				}
 				return membersAPI, currentMembers, nil
-				break
 			}
 		}
 		if len(currentMembers) == 0 {
