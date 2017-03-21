@@ -119,6 +119,7 @@ func (vs *VSphere) ExpectedMembers(
 	timeout := time.Now().Add(MaxWaitForVMAddresses)
 	now := time.Now()
 	for len(members) < len(names) && now.Before(timeout) {
+		members = []etcd.Member{}
 		for _, name := range names {
 			member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
 			addrs, err := vs.getAddresses(name)
