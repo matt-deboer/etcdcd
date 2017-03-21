@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -90,6 +91,8 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	} else if log.GetLevel() >= log.DebugLevel {
 		log.Debugf("Expected cluster members: %v#", expectedMembers)
 	}
+	sort.Slice(expectedMembers, func(i, j int) bool { return expectedMembers[i].Name < expectedMembers[j].Name })
+
 	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
 	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers, *localMaster)
 
