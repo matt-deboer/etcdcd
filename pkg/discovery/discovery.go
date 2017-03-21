@@ -275,10 +275,23 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 					lastErr = err
 					continue
 				}
-				if log.GetLevel() >= log.DebugLevel {
-					log.Debugf("Actual cluster members: %#v", currentMembers)
+				// sanity-check the returned members; it may be partial in case of a yet-forming cluster
+				hasInvalidMembers := false
+				for _, m := range currentMembers {
+					if len(m.Name) == 0 || len(m.PeerURLs) == 0 {
+						if log.GetLevel() >= log.DebugLevel {
+							log.Debugf("Returned actual member list contains invalid member: %#v", m)
+						}
+						hasInvalidMembers = true
+						break
+					}
 				}
-				return membersAPI, currentMembers, nil
+				if !hasInvalidMembers {
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Actual cluster members: %#v", currentMembers)
+					}
+					return membersAPI, currentMembers, nil
+				}
 			}
 		}
 		if len(currentMembers) == 0 {
