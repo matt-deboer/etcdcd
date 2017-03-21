@@ -102,7 +102,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Debugf("Local master: %#v", *localMaster)
 		}
 		// this instance is an expected master
-		if len(currentMembers) > 0 {
+		if len(currentMembers) > 0 && !containsMember(currentMembers, *localMaster) {
 			// there is an existing cluster
 			if err = d.assertSaneClusterState(expectedMembers, currentMembers); err != nil {
 				log.Fatal(err)
