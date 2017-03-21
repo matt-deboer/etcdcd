@@ -31,6 +31,7 @@ import (
 const (
 	ActivePowerState         = "poweredOn"
 	RoundTripperDefaultCount = 3
+	MaxWaitForVMAddresses    = (time.Minute * 10)
 )
 
 var clientLock sync.Mutex
@@ -114,9 +115,12 @@ func (vs *VSphere) ExpectedMembers(
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range names {
-		member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
-		for tries := 0; tries <= 10 && len(member.PeerURLs) == 0; tries++ {
+
+	timeout := time.Now().Add(MaxWaitForVMAddresses)
+	now := time.Now()
+	for len(members) < len(names) && now.Before(timeout) {
+		for _, name := range names {
+			member := etcd.Member{Name: name, ClientURLs: []string{}, PeerURLs: []string{}}
 			addrs, err := vs.getAddresses(name)
 			if err != nil {
 				return nil, err
@@ -129,20 +133,22 @@ func (vs *VSphere) ExpectedMembers(
 				member.ClientURLs = append(member.ClientURLs, fmt.Sprintf("%s://%s:%d", clientScheme, addr, clientPort))
 				member.PeerURLs = append(member.PeerURLs, fmt.Sprintf("%s://%s:%d", serverScheme, addr, serverPort))
 			}
-
-			if len(member.PeerURLs) > 0 {
-				if log.GetLevel() >= log.DebugLevel {
-					log.Debugf("ExpectedMembers: member: %#v", member)
-				}
-			} else {
-				sleepTime := (2 * time.Second)
-				if log.GetLevel() >= log.DebugLevel {
-					log.Debugf("%s has no addresses yet; sleeping for %s", name, sleepTime)
-				}
-				time.Sleep(sleepTime)
+			if len(member.ClientURLs) > 0 {
+				members = append(members, member)
 			}
 		}
-		members = append(members, member)
+		if len(members) < len(names) {
+			sleepTime := (5 * time.Second)
+			if log.GetLevel() >= log.DebugLevel {
+				log.Debugf("Still waiting to resolve addresses for %d out of %d members; sleeping for %s",
+					len(members), (len(names) - len(members)), sleepTime)
+			}
+			time.Sleep(sleepTime)
+			now = time.Now().Add(time.Second)
+			if now.After(timeout) {
+				return nil, fmt.Errorf("Timed out waiting for %v to resolve addresses", names)
+			}
+		}
 	}
 	return members, nil
 }

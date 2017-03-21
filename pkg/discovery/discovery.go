@@ -68,10 +68,9 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			d.ClientPort, d.ServerScheme, d.ServerPort); err == nil {
 			for _, m := range members {
 				// have to cast here because of golang type-system--ugh!
-				if len(m.ClientURLs) > 0 && len(m.PeerURLs) > 0 {
-					expectedMembers = append(expectedMembers, etcd.Member(m))
-				} else if log.GetLevel() >= log.DebugLevel {
-					log.Debugf("Platform %s returned an invalid member which will be ignored: %#v", d.Platform, m)
+				expectedMembers = append(expectedMembers, etcd.Member(m))
+				if len(m.PeerURLs) == 0 {
+					log.Fatalf("Platform %s returned an invalid member which will be ignored: %#v", d.Platform, m)
 				}
 			}
 		} else {
