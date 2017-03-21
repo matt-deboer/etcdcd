@@ -168,7 +168,7 @@ func (d *Discovery) assertSaneClusterState(expectedMembers []etcd.Member, curren
 					break
 				}
 			}
-			if len(matchingPeerURL) > 0 && current.Name != expected.Name {
+			if len(matchingPeerURL) > 0 && len(current.Name) > 0 && current.Name != expected.Name {
 				if !d.IgnoreNamingMismatch {
 					return fmt.Errorf("Expected peer %s with peer URL %s already exists with a different name: %s",
 						expected.Name, matchingPeerURL, current.Name)
