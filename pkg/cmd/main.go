@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"bytes"
 
@@ -104,6 +105,12 @@ func main() {
 				looking for existing members`,
 			EnvVar: "ETCDCD_IGNORE_NAMING_MISMATCH",
 		},
+		cli.StringFlag{
+			Name:  "minimum-uptime-seconds-to-join",
+			Value: "5m",
+			Usage: `The minimum amount of seconds after which it is viable to join an existing cluster in which
+				the current node is an expected member`,
+		},
 	}
 	app.Action = func(c *cli.Context) {
 
@@ -140,6 +147,11 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 	if len(masterFilter) == 0 {
 		log.Fatalf("'%s' is required", "master-names")
 	}
+	minUptimeString := c.String("minimum-uptime-to-join")
+	minJoinUptime, err := time.ParseDuration(c.String("minimum-uptime-to-join"))
+	if err != nil {
+		log.Fatalf("Invalid duration '%s': %v", minUptimeString, err)
+	}
 
 	return &discovery.Discovery{
 		Platform:             platform,
@@ -152,5 +164,7 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 		IgnoreNamingMismatch: c.Bool("ignore-naming-mismatch"),
 		MasterFilter:         masterFilter,
 		MaxTries:             5,
+		MinimumUptimeToJoin:  minJoinUptime,
 	}
+
 }

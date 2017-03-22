@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"sort"
 	"strings"
 	"time"
+
+	"net/http"
 
 	log "github.com/Sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
@@ -28,6 +31,7 @@ type Discovery struct {
 	MasterFilter         string
 	DryRun               bool
 	IgnoreNamingMismatch bool
+	MinimumUptimeToJoin  time.Duration
 }
 
 func findMemberByName(members []etcd.Member, name string) *etcd.Member {
@@ -94,7 +98,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 	sort.Slice(expectedMembers, func(i, j int) bool { return expectedMembers[i].Name < expectedMembers[j].Name })
 
 	localMaster := findMemberByName(expectedMembers, p.LocalInstanceName())
-	membersAPI, currentMembers, err := d.resolveMembersAndAPI(expectedMembers, localMaster)
+	membersAPI, currentMembers, uptime, err := d.resolveMembersAndAPI(expectedMembers, localMaster)
 
 	environment := map[string]string{}
 	environment["ETCD_NAME"] = p.LocalInstanceName()
@@ -105,7 +109,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Debugf("Local master: %#v", *localMaster)
 		}
 		// this instance is an expected master
-		if len(currentMembers) > 0 && !containsMember(currentMembers, *localMaster) {
+		if len(currentMembers) > 0 && !containsMember(currentMembers, *localMaster) && uptime >= d.MinimumUptimeToJoin {
 			// there is an existing cluster
 			if err = d.assertSaneClusterState(expectedMembers, currentMembers); err != nil {
 				log.Fatal(err)
@@ -230,7 +234,7 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
 			if log.GetLevel() >= log.DebugLevel {
 				log.Debugf("Retryable error attempting to add local master %#v: %v", localMember, err)
 			}
-			membersAPI, _, err = d.resolveMembersAndAPI(expectedMembers, localMember)
+			membersAPI, _, _, err = d.resolveMembersAndAPI(expectedMembers, localMember)
 			if err != nil {
 				log.Errorf("%s ERROR: %v", msg, err)
 				return err
@@ -240,11 +244,10 @@ func (d *Discovery) joinExistingCluster(membersAPI etcd.MembersAPI,
 	return nil
 }
 
-func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMember *etcd.Member) (etcd.MembersAPI, []etcd.Member, error) {
+func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member,
+	localMember *etcd.Member) (membersAPI etcd.MembersAPI, currentMembers []etcd.Member, uptime time.Duration, err error) {
 
 	ctx := context.Background()
-	var currentMembers []etcd.Member
-	var membersAPI etcd.MembersAPI
 	var lastErr error
 	for tries := 0; tries <= d.MaxTries; tries++ {
 		for _, member := range expectedMembers {
@@ -267,6 +270,20 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 				}
 
 				membersAPI = etcd.NewMembersAPI(etcdClient)
+				leader, err := membersAPI.Leader(ctx)
+				if err != nil {
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Error getting leader %s %v, %v", member.Name, member.ClientURLs, err)
+					}
+					lastErr = err
+					continue
+				} else if leader == nil {
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Error getting leader %s %v, %v", member.Name, member.ClientURLs, err)
+					}
+					lastErr = errors.New("Failed to resolve cluster leader")
+				}
+
 				currentMembers, err = membersAPI.List(ctx)
 				if err != nil {
 					if log.GetLevel() >= log.DebugLevel {
@@ -275,6 +292,16 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 					lastErr = err
 					continue
 				}
+
+				uptime, err = getUptime(etcdClient.Endpoints()[0])
+				if err != nil {
+					if log.GetLevel() >= log.DebugLevel {
+						log.Debugf("Error listing leader uptime %s %v, %v", member.Name, member.ClientURLs, err)
+					}
+					lastErr = err
+					continue
+				}
+
 				// sanity-check the returned members; it may be partial in case of a yet-forming cluster
 				hasInvalidMembers := false
 				for _, m := range currentMembers {
@@ -290,7 +317,7 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 					if log.GetLevel() >= log.DebugLevel {
 						log.Debugf("Actual cluster members: %#v", currentMembers)
 					}
-					return membersAPI, currentMembers, nil
+					return membersAPI, currentMembers, uptime, nil
 				}
 			}
 		}
@@ -305,5 +332,29 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member, localMem
 			break
 		}
 	}
-	return nil, nil, lastErr
+	return nil, nil, time.Millisecond, lastErr
+}
+
+func getUptime(endpoint string) (time.Duration, error) {
+	resp, err := http.DefaultClient.Get(endpoint + "/v2/stats/self")
+	if err != nil {
+		return time.Millisecond, err
+	}
+
+	defer resp.Body.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return time.Millisecond, err
+	}
+	stats := make(map[string]interface{})
+	err = json.Unmarshal(contents, &stats)
+	if err != nil {
+		return time.Millisecond, err
+	}
+	if leaderInfo, ok := stats["leaderInfo"]; ok {
+		if uptimeString, ok := leaderInfo.(map[string]interface{})["uptime"]; ok {
+			return time.ParseDuration(uptimeString.(string))
+		}
+	}
+	return time.Millisecond, fmt.Errorf("Missing leader uptime info for endpiont %s", endpoint)
 }
