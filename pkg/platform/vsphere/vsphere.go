@@ -73,13 +73,17 @@ type VSphereConfig struct {
 		// PublicNetwork is name of the network the VMs are joined to.
 		PublicNetwork string `gcfg:"public-network"`
 	}
+	Disk struct {
+		// SCSIControllerType defines SCSI controller to be used.
+		SCSIControllerType string `dcfg:"scsicontrollertype"`
+	}
 }
 
 func init() {
 	platform.Register("vsphere", func(config io.Reader) (platform.Platform, error) {
 		cfg, err := readConfig(config)
-		if err != nil && !strings.Contains(err.Error(), "warnings") {
-			log.Fatal("Failed reading config: ", err)
+		if err != nil {
+			return nil, err
 		}
 		return newVSphere(cfg)
 	})
