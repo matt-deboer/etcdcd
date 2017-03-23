@@ -106,7 +106,7 @@ func main() {
 			EnvVar: "ETCDCD_IGNORE_NAMING_MISMATCH",
 		},
 		cli.StringFlag{
-			Name:  "minimum-uptime-seconds-to-join",
+			Name:  "minimum-uptime-to-join",
 			Value: "5m",
 			Usage: `The minimum amount of seconds after which it is viable to join an existing cluster in which
 				the current node is an expected member`,
