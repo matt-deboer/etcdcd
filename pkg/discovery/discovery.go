@@ -293,7 +293,7 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member,
 					continue
 				}
 
-				uptime, err = getUptime(etcdClient.Endpoints()[0])
+				uptime, err = getUptime(member.ClientURLs[0])
 				if err != nil {
 					if log.GetLevel() >= log.DebugLevel {
 						log.Debugf("Error listing leader uptime %s %v, %v", member.Name, member.ClientURLs, err)
