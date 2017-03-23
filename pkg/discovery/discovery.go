@@ -109,7 +109,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Debugf("Local master: %#v", *localMaster)
 		}
 		// this instance is an expected master
-		if len(currentMembers) > 0 && !containsMember(currentMembers, *localMaster) && uptime >= d.MinimumUptimeToJoin {
+		if len(currentMembers) > 0 && uptime >= d.MinimumUptimeToJoin {
 			// there is an existing cluster
 			if err = d.assertSaneClusterState(expectedMembers, currentMembers); err != nil {
 				log.Fatal(err)
@@ -119,8 +119,10 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Infof("Joining existing cluster as a master")
 			// TODO: what if we encounter a state where not of the expected masters are
 			// members of the current cluster?
-			if err := d.joinExistingCluster(membersAPI, expectedMembers, localMaster); err != nil {
-				log.Fatal(err)
+			if !containsMember(currentMembers, *localMaster) {
+				if err := d.joinExistingCluster(membersAPI, expectedMembers, localMaster); err != nil {
+					log.Fatal(err)
+				}
 			}
 			environment["ETCD_INITIAL_CLUSTER_STATE"] = "existing"
 		} else {
