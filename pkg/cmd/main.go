@@ -107,7 +107,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "minimum-uptime-to-join",
-			Value: "5m",
+			Value: "30s",
 			Usage: `The minimum amount of seconds after which it is viable to join an existing cluster in which
 				the current node is an expected member`,
 		},
