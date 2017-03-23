@@ -300,6 +300,8 @@ func (d *Discovery) resolveMembersAndAPI(expectedMembers []etcd.Member,
 					}
 					lastErr = err
 					continue
+				} else if log.GetLevel() >= log.DebugLevel {
+					log.Debugf("Member %s reported current leader uptime is %s", member.Name, uptime)
 				}
 
 				// sanity-check the returned members; it may be partial in case of a yet-forming cluster
