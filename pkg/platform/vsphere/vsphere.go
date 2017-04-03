@@ -450,7 +450,9 @@ func (vs *VSphere) getAddresses(nodeName string) ([]string, error) {
 	for _, v := range mvm.Guest.Net {
 		if v.Network == vs.cfg.Network.PublicNetwork {
 			for _, ip := range v.IpAddress {
-				addrs = append(addrs, ip)
+				if len(ip) > 0 {
+					addrs = append(addrs, ip)
+				}
 			}
 		} else if log.GetLevel() >= log.DebugLevel {
 			log.Debugf("getAddresses: nodeName=%s, net %v are not in configured network", nodeName, v.IpAddress)
