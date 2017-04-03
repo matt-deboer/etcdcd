@@ -20,18 +20,20 @@ import (
 // Discovery provides correct startup details for etcd with respect to
 // known vs. expected cluster membership
 type Discovery struct {
-	ConfigFile           string
-	Platform             string
-	ClientPort           int
-	ServerPort           int
-	ClientScheme         string
-	ServerScheme         string
-	MaxTries             int
-	ProxyMode            bool
-	MasterFilter         string
-	DryRun               bool
-	IgnoreNamingMismatch bool
-	MinimumUptimeToJoin  time.Duration
+	ConfigFile                string
+	Platform                  string
+	ClientPort                int
+	ServerPort                int
+	ClientScheme              string
+	ServerScheme              string
+	MaxTries                  int
+	ProxyMode                 bool
+	MasterFilter              string
+	MasterCount               int
+	DryRun                    bool
+	IgnoreNamingMismatch      bool
+	MinUptimeToJoin           time.Duration
+	MaxWaitForExpectedMasters time.Duration
 }
 
 func findMemberByName(members []etcd.Member, name string) *etcd.Member {
@@ -67,8 +69,10 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		return nil, errors.New("No such platform: " + d.Platform)
 	}
 
+	timeout := time.Now().Add(d.MaxWaitForExpectedMasters)
 	var expectedMembers []etcd.Member
-	for tries := 0; tries < d.MaxTries && len(expectedMembers) == 0; tries++ {
+	for len(expectedMembers) < d.MasterCount && time.Now().Before(timeout) {
+		expectedMembers = []etcd.Member{}
 		if members, err := p.ExpectedMembers(d.MasterFilter, d.ClientScheme,
 			d.ClientPort, d.ServerScheme, d.ServerPort); err == nil {
 			for _, m := range members {
@@ -81,7 +85,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 		} else {
 			return nil, err
 		}
-		if len(expectedMembers) == 0 {
+		if len(expectedMembers) < d.MasterCount {
 			sleepTime := (2 * time.Second)
 			if log.GetLevel() >= log.DebugLevel {
 				log.Debugf("Failed to resolve expected members; sleeping for %s", sleepTime)
@@ -109,7 +113,7 @@ func (d *Discovery) DiscoverEnvironment() (map[string]string, error) {
 			log.Debugf("Local master: %#v", *localMaster)
 		}
 		// this instance is an expected master
-		if len(currentMembers) > 0 && uptime >= d.MinimumUptimeToJoin {
+		if len(currentMembers) > 0 && uptime >= d.MinUptimeToJoin {
 			// there is an existing cluster
 			if err = d.assertSaneClusterState(expectedMembers, currentMembers); err != nil {
 				log.Fatal(err)

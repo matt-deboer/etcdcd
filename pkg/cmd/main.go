@@ -89,6 +89,19 @@ func main() {
 				of the masters (e.g., 'k8s-master-*')`,
 			EnvVar: "ETCDCD_MASTER_NAMES",
 		},
+		cli.IntFlag{
+			Name:   "master-count",
+			Value:  3,
+			Usage:  `The expected number of masters in an intial cluster; ignored when joining an existing cluster`,
+			EnvVar: "ETCDCD_MASTER_COUNT",
+		},
+		cli.StringFlag{
+			Name:  "maximum-master-resolution-time",
+			Value: "5m",
+			Usage: `The minimum amount of seconds after which it is viable to join an existing cluster in which
+				the current node is an expected member`,
+			EnvVar: "ETCDCD_MAX_MASTER_RESOLUTION_TIME",
+		},
 		cli.BoolFlag{
 			Name:   "dry-run",
 			Usage:  "Don't perform any changes; instead log what would have been done",
@@ -110,6 +123,7 @@ func main() {
 			Value: "30s",
 			Usage: `The minimum amount of seconds after which it is viable to join an existing cluster in which
 				the current node is an expected member`,
+			EnvVar: "ETCDCD_MIN_UPTIME_TO_JOIN",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -147,24 +161,30 @@ func parseArgs(c *cli.Context) *discovery.Discovery {
 	if len(masterFilter) == 0 {
 		log.Fatalf("'%s' is required", "master-names")
 	}
-	minUptimeString := c.String("minimum-uptime-to-join")
-	minJoinUptime, err := time.ParseDuration(c.String("minimum-uptime-to-join"))
-	if err != nil {
-		log.Fatalf("Invalid duration '%s': %v", minUptimeString, err)
-	}
 
 	return &discovery.Discovery{
-		Platform:             platform,
-		ConfigFile:           c.String("platform-config-file"),
-		ClientPort:           c.Int("client-port"),
-		ServerPort:           c.Int("server-port"),
-		ClientScheme:         c.String("client-scheme"),
-		ServerScheme:         c.String("server-scheme"),
-		ProxyMode:            c.Bool("proxy"),
-		IgnoreNamingMismatch: c.Bool("ignore-naming-mismatch"),
-		MasterFilter:         masterFilter,
-		MaxTries:             5,
-		MinimumUptimeToJoin:  minJoinUptime,
+		Platform:                  platform,
+		ConfigFile:                c.String("platform-config-file"),
+		ClientPort:                c.Int("client-port"),
+		ServerPort:                c.Int("server-port"),
+		ClientScheme:              c.String("client-scheme"),
+		ServerScheme:              c.String("server-scheme"),
+		ProxyMode:                 c.Bool("proxy"),
+		IgnoreNamingMismatch:      c.Bool("ignore-naming-mismatch"),
+		MasterFilter:              masterFilter,
+		MasterCount:               c.Int("master-count"),
+		MaxTries:                  5,
+		MinUptimeToJoin:           parseDuration(c, "minimum-uptime-to-join"),
+		MaxWaitForExpectedMasters: parseDuration(c, "maximum-master-resolution-time"),
 	}
 
+}
+
+func parseDuration(c *cli.Context, flag string) time.Duration {
+	stringValue := c.String(flag)
+	duration, err := time.ParseDuration(stringValue)
+	if err != nil {
+		log.Fatalf("Invalid duration for '%s': '%s': %v", flag, stringValue, err)
+	}
+	return duration
 }
