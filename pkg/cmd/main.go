@@ -139,7 +139,7 @@ func main() {
 		log.Infof("Environment discovery success: results: %v", environment)
 		out := bytes.NewBufferString("")
 		for k, v := range environment {
-			fmt.Fprintf(out, "%s=\"%s\"\n", k, v)
+			fmt.Fprintf(out, "%s=%s\n", k, v)
 		}
 		if outputFile := c.String("output-file"); len(outputFile) > 0 {
 			ioutil.WriteFile(outputFile, out.Bytes(), 0644)
