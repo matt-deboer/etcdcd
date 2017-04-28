@@ -208,6 +208,8 @@ func getVMName(client *govmomi.Client, cfg *VSphereConfig) (string, error) {
 	svm, err := s.FindByUuid(ctx, dc, strings.ToLower(strings.TrimSpace(vmUUID)), true, nil)
 	if err != nil {
 		return "", err
+	} else if svm == nil {
+		return "", fmt.Errorf("Failed to identify current vm by UUID")
 	}
 
 	var vm mo.VirtualMachine
