@@ -6,7 +6,7 @@ etcdcd
 
 **etcd cluster discovery**
 
-Assists in creation/joining/pruning of an etcd (2.x) cluster using the `static` discovery mechanism. 
+Assists in creation/joining/pruning of an etcd (2.x, 3.x) cluster using the `static` discovery mechanism. 
 Supports `aws` (ASG-based masters) and `vsphere` deployments currently.
 
 
