@@ -119,6 +119,10 @@ func (a *AWS) getASGInstanceIDs(sess *session.Session, asgName string) ([]*strin
 		return nil, err
 	}
 
+	if resp.AutoScalingGroups == nil || len(resp.AutoScalingGroups) == 0 {
+		return nil, fmt.Errorf("No autoscaling groups were found matching the name '%s'", asgName)
+	}
+
 	instanceIDs := make([]*string, 0, len(resp.AutoScalingGroups[0].Instances))
 	for _, i := range resp.AutoScalingGroups[0].Instances {
 		instanceIDs = append(instanceIDs, i.InstanceId)
